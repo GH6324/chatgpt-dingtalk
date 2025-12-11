@@ -6,10 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/solywsh/chatgpt"
-
 	"github.com/eryajf/chatgpt-dingtalk/pkg/db"
 	"github.com/eryajf/chatgpt-dingtalk/pkg/dingbot"
+	"github.com/eryajf/chatgpt-dingtalk/pkg/llm"
 	"github.com/eryajf/chatgpt-dingtalk/pkg/logger"
 	"github.com/eryajf/chatgpt-dingtalk/public"
 )
@@ -94,8 +93,36 @@ func ProcessRequest(rmsg *dingbot.ReceiveMsg) error {
 			}
 		default:
 			if public.FirstCheck(rmsg) {
+				// 检查是否启用流式模式
+				if public.Config.StreamMode {
+					logger.Info("📡 使用串聊流式模式")
+					if public.Config.CardTemplateID != "" {
+						logger.Info("🎴 使用流式卡片输出")
+						// 使用流式卡片输出
+						return DoStreamWithCard("串聊", rmsg, public.Config.CardTemplateID)
+					} else {
+						logger.Info("💬 使用简化流式输出")
+						// 使用流式普通输出
+						return DoStream("串聊", rmsg)
+					}
+				}
+				logger.Info("💭 使用传统串聊模式")
 				return Do("串聊", rmsg)
 			} else {
+				// 检查是否启用流式模式
+				if public.Config.StreamMode {
+					logger.Info("📡 使用单聊流式模式")
+					if public.Config.CardTemplateID != "" {
+						logger.Info("🎴 使用流式卡片输出")
+						// 使用流式卡片输出
+						return DoStreamWithCard("单聊", rmsg, public.Config.CardTemplateID)
+					} else {
+						logger.Info("💬 使用简化流式输出")
+						// 使用流式普通输出
+						return DoStream("单聊", rmsg)
+					}
+				}
+				logger.Info("💭 使用传统单聊模式")
 				return Do("单聊", rmsg)
 			}
 		}
@@ -120,7 +147,7 @@ func Do(mode string, rmsg *dingbot.ReceiveMsg) error {
 		if err != nil {
 			logger.Error("往MySQL新增数据失败,错误信息：", err)
 		}
-		reply, err := chatgpt.SingleQa(rmsg.Text.Content, rmsg.GetSenderIdentifier())
+		reply, err := llm.SingleQa(rmsg.Text.Content, rmsg.GetSenderIdentifier())
 		if err != nil {
 			logger.Info(fmt.Errorf("gpt request error: %v", err))
 			if strings.Contains(fmt.Sprintf("%v", err), "maximum question length exceeded") {
@@ -179,7 +206,7 @@ func Do(mode string, rmsg *dingbot.ReceiveMsg) error {
 		if err != nil {
 			logger.Error("往MySQL新增数据失败,错误信息：", err)
 		}
-		cli, reply, err := chatgpt.ContextQa(rmsg.Text.Content, rmsg.GetSenderIdentifier())
+		cli, reply, err := llm.ContextQa(rmsg.Text.Content, rmsg.GetSenderIdentifier())
 		if err != nil {
 			logger.Info(fmt.Sprintf("gpt request error: %v", err))
 			if strings.Contains(fmt.Sprintf("%v", err), "maximum text length exceeded") {
